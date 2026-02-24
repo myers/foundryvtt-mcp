@@ -31,6 +31,14 @@ import {
   handleRefreshWorldData,
   handleSearchWorld,
 } from './handlers/world.js';
+import { handleGetRawActor, handleGetSystemTemplate } from './handlers/system.js';
+import {
+  handleCreateActor,
+  handleUpdateActor,
+  handleDeleteActor,
+  handleAddActorItems,
+  handleCreateFolder,
+} from './handlers/write-actors.js';
 import { toolRegistry } from './registry.js';
 
 /**
@@ -142,6 +150,58 @@ export async function routeToolRequest(
         throw new Error('Missing required parameter: query');
       }
       return handleLookupRule(args as { query: string; system?: string }, foundryClient);
+
+    // Write tools
+    case 'create_actor':
+      return handleCreateActor(
+        args as {
+          name: string;
+          type: string;
+          systemData?: Record<string, unknown>;
+          items?: Array<{ name: string; type: string; system?: Record<string, unknown> }>;
+          img?: string;
+          folder?: string;
+        },
+        foundryClient,
+      );
+    case 'update_actor':
+      if (!('actorId' in args) || typeof args.actorId !== 'string') {
+        throw new Error('Missing required parameter: actorId');
+      }
+      return handleUpdateActor(
+        args as { actorId: string; updates: Record<string, unknown> },
+        foundryClient,
+      );
+    case 'delete_actor':
+      if (!('actorId' in args) || typeof args.actorId !== 'string') {
+        throw new Error('Missing required parameter: actorId');
+      }
+      return handleDeleteActor(args as { actorId: string }, foundryClient);
+    case 'add_actor_items':
+      if (!('actorId' in args) || typeof args.actorId !== 'string') {
+        throw new Error('Missing required parameter: actorId');
+      }
+      return handleAddActorItems(
+        args as {
+          actorId: string;
+          items: Array<{ name: string; type: string; system?: Record<string, unknown> }>;
+        },
+        foundryClient,
+      );
+    case 'create_folder':
+      return handleCreateFolder(
+        args as { name: string; type: string; parent?: string },
+        foundryClient,
+      );
+
+    // System introspection tools
+    case 'get_system_template':
+      return handleGetSystemTemplate(args, foundryClient);
+    case 'get_raw_actor':
+      if (!('actorId' in args) || typeof args.actorId !== 'string') {
+        throw new Error('Missing required parameter: actorId');
+      }
+      return handleGetRawActor(args as { actorId: string }, foundryClient);
 
     // Diagnostics tools (require REST API module)
     case 'get_recent_logs':

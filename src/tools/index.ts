@@ -3,7 +3,7 @@
  */
 
 // Export tool and resource definitions
-export { getAllTools } from './definitions.js';
+export { getAllTools, getEnrichedTools } from './definitions.js';
 export * from './handlers/actors.js';
 export * from './handlers/chat.js';
 export * from './handlers/combat.js';
@@ -15,6 +15,7 @@ export * from './handlers/items.js';
 export * from './handlers/journals.js';
 export * from './handlers/resources.js';
 export * from './handlers/scenes.js';
+export * from './handlers/system.js';
 export * from './handlers/users.js';
 export * from './handlers/world.js';
 export { getAllResources } from './resources.js';

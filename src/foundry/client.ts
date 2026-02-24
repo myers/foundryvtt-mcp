@@ -19,6 +19,7 @@ import type {
   WorldActor,
   WorldCombat,
   WorldData,
+  WorldFolder,
   WorldItem,
   WorldJournal,
   WorldMessage,
@@ -120,14 +121,15 @@ export class FoundryClient {
     }
 
     const user = this.config.userId || this.config.username;
-    if (!user || !this.config.password) {
+    if (!user) {
       throw new Error(
-        'Socket.IO mode requires username/userId and password. ' +
-          'Set FOUNDRY_USERNAME + FOUNDRY_PASSWORD or FOUNDRY_USER_ID + FOUNDRY_PASSWORD.',
+        'Socket.IO mode requires username/userId. ' +
+          'Set FOUNDRY_USERNAME or FOUNDRY_USER_ID.',
       );
     }
 
-    const { session } = await authenticateFoundry(this.config.baseUrl, user, this.config.password);
+    const password = this.config.password ?? '';
+    const { session } = await authenticateFoundry(this.config.baseUrl, user, password);
 
     // Connect authenticated socket and load world data
     this.worldData = await this.connectAndLoadWorld(session);
@@ -235,6 +237,155 @@ export class FoundryClient {
 
   getWorldData(): WorldData | null {
     return this.worldData;
+  }
+
+  // ==========================================================================
+  // Write operations via modifyDocument
+  // ==========================================================================
+
+  /**
+   * Sends a modifyDocument request via Socket.IO.
+   * This is the single Foundry protocol for all CRUD operations.
+   */
+  private modifyDocument(
+    type: string,
+    action: 'create' | 'update' | 'delete',
+    data: Array<Record<string, unknown>>,
+    options: { parentUuid?: string } = {},
+  ): Promise<Record<string, unknown>> {
+    if (!this.socket?.connected) {
+      throw new Error('Not connected — cannot modify documents');
+    }
+
+    const payload = {
+      type,
+      action,
+      operation: {
+        data,
+        pack: null,
+        parentUuid: options.parentUuid ?? null,
+        modifiedTime: Date.now(),
+        render: true,
+      },
+    };
+
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error(`modifyDocument timeout (${type}.${action})`));
+      }, this.config.timeout || 10000);
+
+      this.socket!.emit('modifyDocument', payload, (response: Record<string, unknown>) => {
+        clearTimeout(timeout);
+
+        if (response.error) {
+          reject(new Error(`modifyDocument failed: ${response.error}`));
+          return;
+        }
+
+        resolve(response);
+      });
+    });
+  }
+
+  async createActor(data: {
+    name: string;
+    type: string;
+    system?: Record<string, unknown>;
+    items?: Array<Record<string, unknown>>;
+    img?: string;
+    folder?: string;
+  }): Promise<WorldActor> {
+    const docData: Record<string, unknown> = {
+      name: data.name,
+      type: data.type,
+    };
+    if (data.system) docData.system = data.system;
+    if (data.items) docData.items = data.items;
+    if (data.img) docData.img = data.img;
+    if (data.folder) docData.folder = data.folder;
+
+    const response = await this.modifyDocument('Actor', 'create', [docData]);
+    await this.refreshWorldData();
+
+    const result = response.result as Array<Record<string, unknown>>;
+    const created = result?.[0];
+    if (!created?._id) {
+      throw new Error('Actor creation returned no document');
+    }
+
+    const actor = this.worldData?.actors.find((a) => a._id === created._id);
+    if (!actor) {
+      throw new Error(`Created actor ${created._id} not found after refresh`);
+    }
+    return actor;
+  }
+
+  async updateActor(actorId: string, updates: Record<string, unknown>): Promise<WorldActor> {
+    const docData: Record<string, unknown> = { _id: actorId, ...updates };
+
+    await this.modifyDocument('Actor', 'update', [docData]);
+    await this.refreshWorldData();
+
+    const actor = this.worldData?.actors.find((a) => a._id === actorId);
+    if (!actor) {
+      throw new Error(`Updated actor ${actorId} not found after refresh`);
+    }
+    return actor;
+  }
+
+  async deleteActor(actorId: string): Promise<{ deleted: string }> {
+    await this.modifyDocument('Actor', 'delete', [{ _id: actorId }]);
+    await this.refreshWorldData();
+    return { deleted: actorId };
+  }
+
+  async createEmbeddedItems(
+    actorId: string,
+    items: Array<Record<string, unknown>>,
+  ): Promise<WorldItem[]> {
+    const response = await this.modifyDocument('Item', 'create', items, {
+      parentUuid: `Actor.${actorId}`,
+    });
+    await this.refreshWorldData();
+
+    const result = response.result as Array<Record<string, unknown>>;
+    return (result || []).map((r) => ({
+      _id: r._id as string,
+      name: r.name as string,
+      type: r.type as string,
+      system: (r.system as Record<string, unknown>) || {},
+    }));
+  }
+
+  async createFolder(data: {
+    name: string;
+    type: string;
+    parent?: string;
+  }): Promise<WorldFolder> {
+    const docData: Record<string, unknown> = {
+      name: data.name,
+      type: data.type,
+    };
+    if (data.parent) docData.parent = data.parent;
+
+    const response = await this.modifyDocument('Folder', 'create', [docData]);
+    await this.refreshWorldData();
+
+    const result = response.result as Array<Record<string, unknown>>;
+    const created = result?.[0];
+    if (!created?._id) {
+      throw new Error('Folder creation returned no document');
+    }
+
+    return {
+      _id: created._id as string,
+      name: created.name as string,
+      type: created.type as string,
+      parent: (created.parent as string) || null,
+      sorting: (created.sorting as string) || 'a',
+      sort: (created.sort as number) || 0,
+      color: (created.color as string) || null,
+    };
   }
 
   // ==========================================================================

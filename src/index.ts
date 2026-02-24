@@ -28,12 +28,9 @@ import dotenv from 'dotenv';
 import { config } from './config/index.js';
 import { DiagnosticsClient } from './diagnostics/client.js';
 import { FoundryClient, type FoundryClientConfig } from './foundry/client.js';
-import {
-  getAllResources,
-  getAllTools,
-  routeResourceRequest,
-  routeToolRequest,
-} from './tools/index.js';
+import { resolveSystemConfig } from './systems/index.js';
+import { getEnrichedTools } from './tools/definitions.js';
+import { getAllResources, routeResourceRequest, routeToolRequest } from './tools/index.js';
 import { DiagnosticSystem } from './utils/diagnostics.js';
 import { logger } from './utils/logger.js';
 
@@ -104,11 +101,11 @@ class FoundryMCPServer {
    * @private
    */
   private setupHandlers(): void {
-    // List available tools
+    // List available tools (enriched with system-specific guidance when available)
     this.server.setRequestHandler(ListToolsRequestSchema, async () => {
       logger.info('Listing available tools');
       return {
-        tools: getAllTools(),
+        tools: getEnrichedTools(),
       };
     });
 
@@ -178,6 +175,15 @@ class FoundryMCPServer {
       // Connect to FoundryVTT
       await this.foundryClient.connect();
       logger.info('Connected to FoundryVTT successfully');
+
+      // Resolve system-specific config from worldData
+      const worldData = this.foundryClient.getWorldData();
+      if (worldData?.system) {
+        const systemId = (worldData.system as Record<string, unknown>).id as string | undefined;
+        if (systemId) {
+          resolveSystemConfig(systemId);
+        }
+      }
 
       // Start the MCP server
       const transport = new StdioServerTransport();

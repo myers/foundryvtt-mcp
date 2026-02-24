@@ -11,6 +11,24 @@ A Model Context Protocol (MCP) server that integrates with FoundryVTT, allowing 
 - **Game State** - Access combat status, chat messages, user list, and world information
 - **Content Generation** - Generate NPCs, loot tables, and rule lookups
 - **World Search** - Full-text search across all game entities
+- **Write Operations** - Create, update, and delete actors; add embedded items; organize with folders
+
+### System-Aware Output
+
+The server auto-detects the connected game system and adapts its behavior:
+
+- **Tool descriptions** are enriched with system-specific guidance (valid types, field paths, workflows)
+- **Search results** use system-appropriate formatting (e.g., DEF/TOUGH for Expanse instead of HP/AC for D&D)
+- **Schema introspection** via `get_system_template` returns the actual Actor/Item template plus curated field docs and step-by-step recipes
+
+Currently supported systems:
+
+| System | ID | Status |
+|--------|----|--------|
+| **The Expanse RPG** | `expanse` | Fully supported |
+| D&D 5e / other systems | — | Generic fallback (works, but output uses D&D-style formatting) |
+
+Adding a new system requires only a single config file — see [Adding a New System](#adding-a-new-system).
 
 ### Real-time Integration
 
@@ -185,6 +203,19 @@ Ask your AI assistant things like:
 - `generate_npc` - Create random NPCs
 - `generate_loot` - Create treasure appropriate for level
 
+### Write Operations
+
+- `create_actor` - Create characters, NPCs, or other actors with system-specific data
+- `update_actor` - Update fields on existing actors using dot-notation paths
+- `delete_actor` - Remove an actor from the world
+- `add_actor_items` - Add embedded items (weapons, talents, etc.) to an actor
+- `create_folder` - Create organizational folders for any document type
+
+### System Introspection
+
+- `get_system_template` - View the Actor/Item schema for the connected system, including field docs and step-by-step recipes
+- `get_raw_actor` - Inspect the full raw JSON of any actor (useful for understanding system-specific data shapes)
+
 ### Diagnostics (Optional — requires REST API module)
 
 - `get_recent_logs` - Retrieve filtered FoundryVTT logs
@@ -289,8 +320,13 @@ src/
 │   ├── auth.ts          # Socket.IO 4-step authentication
 │   ├── client.ts        # FoundryVTT client with worldData cache
 │   └── types.ts         # TypeScript interfaces + WorldData
+├── systems/
+│   ├── types.ts         # SystemConfig interface + related types
+│   ├── registry.ts      # Config resolution + singleton management
+│   ├── expanse.ts       # The Expanse RPG system config
+│   └── index.ts         # Re-exports
 ├── tools/
-│   ├── definitions.ts   # Tool schemas by category
+│   ├── definitions.ts   # Tool schemas + system-aware enrichment
 │   ├── router.ts        # Tool request routing
 │   ├── resources.ts     # MCP resource definitions
 │   └── handlers/        # Per-tool handler implementations
@@ -306,6 +342,21 @@ src/
 3. Wire the handler in `src/tools/router.ts`
 4. Add TypeScript types in `src/foundry/types.ts` if needed
 5. Test with your AI assistant
+
+### Adding a New System
+
+To add support for a new game system (e.g., Pathfinder 2e):
+
+1. Create `src/systems/pf2e.ts` implementing the `SystemConfig` interface
+2. Add `pf2e: pf2eConfig` to the map in `src/systems/registry.ts`
+3. Re-export from `src/systems/index.ts`
+
+No other files need to change. The `SystemConfig` interface requires:
+
+- **actorTypes / itemTypes** — valid types with key field documentation
+- **toolGuidance** — text appended to tool descriptions when this system is active
+- **recipes** — step-by-step workflows (e.g., "Create a PF2e NPC")
+- **formatters** — functions for actor summaries, details, item summaries, and combatant lines
 
 ### Testing
 
@@ -464,13 +515,17 @@ const result = await client.request({
 - [x] Chat message history
 - [x] NPC and loot generation
 - [x] Rule lookups
+- [x] Write operations (create/update/delete actors, add items, create folders)
+- [x] System-aware output (auto-detect game system, adapt tool descriptions and formatting)
+- [x] System introspection (template schema, raw actor inspection, recipes)
+- [x] The Expanse RPG system support
 
 ### Planned
 
+- [ ] Pathfinder 2e system support
 - [ ] Combat management (start/end combat, advance initiative)
 - [ ] Token manipulation (move, update status effects)
 - [ ] Scene navigation and switching
-- [ ] Character sheet editing (level up, add equipment)
 - [ ] Journal entry creation and editing
 - [ ] Macro execution and management
 - [ ] Multi-world support

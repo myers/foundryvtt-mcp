@@ -832,6 +832,20 @@ export interface WorldEffect {
 }
 
 /**
+ * Raw folder document from worldData.
+ */
+export interface WorldFolder {
+  _id: string;
+  name: string;
+  type: string;
+  parent: string | null;
+  sorting: string;
+  sort: number;
+  color: string | null;
+  flags?: Record<string, unknown>;
+}
+
+/**
  * Complete world data returned by the Socket.IO 'world' event.
  */
 export interface WorldData {
@@ -856,6 +870,12 @@ export interface WorldData {
   tables: Array<Record<string, unknown>>;
   cards: Array<Record<string, unknown>>;
   packs: Array<Record<string, unknown>>;
+  /** System template data describing Actor/Item schemas */
+  template?: {
+    Actor?: Record<string, unknown>;
+    Item?: Record<string, unknown>;
+    [key: string]: unknown;
+  };
   // Additional fields may be present depending on version
   [key: string]: unknown;
 }
