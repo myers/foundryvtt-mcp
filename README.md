@@ -104,10 +104,12 @@ npm run dev
 
 The MCP server connects to FoundryVTT via Socket.IO using a standard FoundryVTT user account. No custom modules are required for full game data access.
 
+> **Important:** The MCP server holds a persistent Socket.IO session as the configured user. FoundryVTT does not allow two simultaneous sessions for the same user, so **you will not be able to log in to FoundryVTT in your browser as the same user** while the MCP server is running. Create a dedicated user account for the MCP server (e.g., "MCP" or "AI Assistant") with Gamemaster or Assistant GM permissions, and use a different account for your own browser session.
+
 ### Setup
 
 1. Ensure FoundryVTT is running with an active world (not on the setup screen)
-2. Create or use an existing FoundryVTT user account with appropriate permissions
+2. **Create a dedicated FoundryVTT user account for the MCP server** (do not reuse your personal login)
 3. Add credentials to your `.env` file:
 
 ```env
@@ -302,6 +304,10 @@ npm run dev  # Shows detailed logging
 - Verify username and password match a FoundryVTT user exactly (case-sensitive)
 - Check user permissions in FoundryVTT
 - Try setting `FOUNDRY_USER_ID` to the 16-character document `_id`
+
+**"Cannot log in to FoundryVTT while MCP is running"**
+
+- This is expected — FoundryVTT only allows one session per user. Create a dedicated user for the MCP server and use a different account for your browser session.
 
 **"Tool not found" errors**
 
